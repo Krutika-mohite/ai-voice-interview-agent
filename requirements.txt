@@ -1,0 +1,29 @@
+# --- Existing ---------------------------------------------------------------
+langchain
+langgraph>=0.4.0          # interrupt()/Command human-in-the-loop + InMemorySaver
+openai>=1.40              # used only if LLM/STT/TTS provider is set to "openai"
+faiss-cpu                 # kept (not used by current code)
+pypdf
+fastapi                   # kept (not used by current code)
+uvicorn                   # kept (not used by current code)
+
+# --- LLM providers ----------------------------------------------------------
+langchain-ollama>=0.3     # default LLM: local Ollama (num_ctx, seed, schema-enforced JSON)
+langchain-community       # fallback import path for ChatOllama (original code)
+langchain-openai          # only needed when LLM_PROVIDER=openai
+
+# --- Config -----------------------------------------------------------------
+python-dotenv
+pydantic>=2               # schemas for structured LLM output
+
+# --- UI ---------------------------------------------------------------------
+streamlit>=1.50           # st.audio_input = built-in browser microphone recorder
+
+# --- Voice ------------------------------------------------------------------
+faster-whisper>=1.0       # local speech-to-text (no API key; model downloads on first use)
+edge-tts>=6.1             # text-to-speech, natural neural voices (no API key)
+gTTS>=2.5                 # text-to-speech fallback (no API key)
+numpy                     # recording validation (silence detection)
+
+# --- Tests (optional) -------------------------------------------------------
+pytest

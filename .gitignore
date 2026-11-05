@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.wav
+*.mp3
+.pytest_cache/
+# Never commit real keys
+.streamlit/secrets.toml

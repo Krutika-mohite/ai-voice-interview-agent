@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview proctoring</title>
+<style>
+  :root { --ink:#12303B; --soft:#24495A; --muted:#5C7179; --line:#D5DEDC; --paper:#fff;
+          --go:#2F7F73; --mid:#B7791F; --low:#B4432F; --signal:#E9A23B; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:transparent; color:var(--ink);
+    font-family:'Source Sans 3', system-ui, -apple-system, 'Segoe UI', sans-serif; font-size:15px; }
+  button { font:inherit; font-weight:600; border-radius:999px; padding:.55rem 1.3rem; cursor:pointer;
+    border:1px solid var(--go); background:var(--go); color:#fff; }
+  button:disabled { background:#C9D4D2; border-color:#C9D4D2; cursor:not-allowed; }
+  button.secondary { background:var(--paper); color:var(--ink); border-color:var(--line); }
+  button:focus-visible { outline:3px solid var(--signal); outline-offset:2px; }
+  .hidden { display:none !important; }
+
+  /* Setup card */
+  #setup { background:var(--paper); border:1px solid var(--line); border-radius:18px; padding:1.3rem 1.4rem; }
+  #setup h2 { font-size:1.15rem; margin:0 0 .4rem; }
+  #setup p { margin:.2rem 0 .8rem; line-height:1.55; color:var(--soft); max-width:62ch; }
+  .setup-body { display:grid; grid-template-columns: 300px 1fr; gap:1.2rem; align-items:start; margin-top:.6rem; }
+  .cam { position:relative; width:100%; aspect-ratio:4/3; border-radius:14px; overflow:hidden; background:#E6ECEB; }
+  .cam video { width:100%; height:100%; object-fit:cover; transform:scaleX(-1); display:block; }
+  .cam .ph { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--muted); text-align:center; padding:1rem; font-size:.95rem; }
+  ul.checks { list-style:none; margin:0 0 1rem; padding:0; display:grid; gap:.5rem; }
+  ul.checks li { display:flex; gap:.55rem; align-items:center; }
+  .dot { width:1.3rem; height:1.3rem; border-radius:50%; flex:none; display:inline-flex; align-items:center;
+    justify-content:center; font-size:.75rem; font-weight:700; border:1.5px solid var(--line); color:var(--muted); }
+  .dot.ok { background:var(--go); border-color:var(--go); color:#fff; }
+  .dot.bad { background:#fff; border-color:var(--low); color:var(--low); }
+  .rules { font-size:.92rem; color:var(--soft); margin:.2rem 0 1rem; padding-left:1.1rem; line-height:1.5; }
+  .msg { border-left:4px solid var(--low); background:#FBF1EF; padding:.6rem .8rem; margin:.6rem 0; color:var(--ink); line-height:1.45; }
+  .msg.info { border-left-color:var(--go); background:#EEF5F3; }
+
+  /* Monitor strip */
+  #monitor { display:flex; gap:.8rem; align-items:center; background:var(--paper); border:1px solid var(--line);
+    border-radius:14px; padding:.45rem .6rem; }
+  #monitor .cam { width:104px; flex:none; border-radius:10px; }
+  .mon-text { min-width:0; }
+  .mon-title { font-weight:700; display:flex; align-items:center; gap:.45rem; }
+  .rec { width:.55rem; height:.55rem; border-radius:50%; background:var(--low); }
+  .mon-sub { color:var(--muted); font-size:.9rem; margin-top:.1rem; }
+  .mon-live { font-size:.9rem; margin-top:.15rem; }
+  .mon-live.bad { color:var(--low); font-weight:600; }
+  .strikes { display:flex; gap:.25rem; margin-left:auto; flex:none; }
+  .strikes i { width:.8rem; height:.8rem; border-radius:50%; border:1.5px solid var(--line); display:block; }
+  .strikes i.on { background:var(--low); border-color:var(--low); }
+  #ended { font-weight:700; color:var(--low); }
+
+  @media (max-width: 620px) { .setup-body { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: no-preference) { .rec { animation: pulse 1.6s ease-in-out infinite; } }
+  @keyframes pulse { 50% { opacity:.35; } }
+</style>
+</head>
+<body>
+
+<section id="setup" class="hidden" aria-live="polite">
+  <h2>Camera and fullscreen check</h2>
+  <p>This interview is proctored. Your camera is analysed <b>on this computer only</b> to check that you
+     stay in view. No video or images are recorded or uploaded.</p>
+  <div class="setup-body">
+    <div class="cam"><video id="v1" playsinline muted></video><div class="ph" id="ph1">Camera is off</div></div>
+    <div>
+      <ul class="checks">
+        <li><span class="dot" id="c-cam">1</span>Camera and microphone allowed</li>
+        <li><span class="dot" id="c-model">2</span>Face detection loaded</li>
+        <li><span class="dot" id="c-face">3</span>Only your face is visible</li>
+        <li><span class="dot" id="c-look">4</span>You are facing the screen</li>
+      </ul>
+      <ul class="rules" id="rules"></ul>
+      <div id="err1" class="msg hidden" role="alert"></div>
+      <p id="own-tab-wrap" class="hidden" style="margin:.2rem 0 .9rem">
+        <a id="own-tab" target="_blank" rel="noopener"
+           style="font-weight:700;color:var(--go)">Open the interview in its own tab &rarr;</a>
+      </p>
+      <button id="btn-cam">Turn on camera</button>
+      <button id="btn-fs" class="hidden" disabled>Enter fullscreen and start</button>
+    </div>
+  </div>
+</section>
+
+<section id="monitor" class="hidden" aria-live="polite">
+  <div class="cam"><video id="v2" playsinline muted></video><div class="ph" id="ph2">Starting…</div></div>
+  <div class="mon-text">
+    <div class="mon-title"><span class="rec" aria-hidden="true"></span><span id="mon-title">Proctoring is on</span></div>
+    <div class="mon-sub" id="mon-sub">Stay in fullscreen and keep your face in view.</div>
+    <div class="mon-live" id="mon-live">Checking…</div>
+    <button id="btn-return" class="hidden" style="margin-top:.4rem">Return to fullscreen</button>
+  </div>
+  <div class="strikes" id="strikes" aria-label="Warnings"></div>
+</section>
+
+<script src="rules.js"></script>
+<script>
+(function () {
+  "use strict";
+  var P = window.Proctor;
+
+  /* ---------------- Streamlit component protocol (no build step) ---------------- */
+  function send(type, data) {
+    var msg = Object.assign({ isStreamlitMessage: true, type: type }, data || {});
+    try { window.parent.postMessage(msg, "*"); } catch (e) { /* parent gone */ }
+  }
+  var exitMode = false;
+  function setHeight() {
+    var h = exitMode ? 0 : Math.ceil(document.body.getBoundingClientRect().height) + 4;
+    send("streamlit:setFrameHeight", { height: h });
+  }
+  var state = { nonce: null, ready: false, events: [], error: null };
+  function pushValue() {
+    send("streamlit:setComponentValue", { value: JSON.parse(JSON.stringify(state)), dataType: "json" });
+  }
+  function addEvent(type, label, fatal) {
+    var ev = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+               type: type, label: label, fatal: !!fatal, at: new Date().toISOString() };
+    state.events.push(ev);
+    if (state.events.length > 60) state.events.shift();
+    pushValue();
+    return ev;
+  }
+
+  /* ---------------- Parent page access (same origin) ---------------- */
+  function pdoc() { try { return window.parent.document; } catch (e) { return null; } }
+  function fsElement(d) { return d && (d.fullscreenElement || d.webkitFullscreenElement); }
+  function hasFocus() {
+    var d = pdoc();
+    try { return (d ? d.hasFocus() : false) || document.hasFocus(); } catch (e) { return true; }
+  }
+
+  /* ---------------- Camera + models ---------------- */
+  var stream = null, face = null, hand = null, settings = {};
+  async function startCamera(withAudio) {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
+      audio: !!withAudio,
+    });
+    // Audio was only requested so the browser asks for microphone permission now,
+    // not in the middle of the interview. Stop it straight away.
+    stream.getAudioTracks().forEach(function (t) { t.stop(); });
+    return stream;
+  }
+  /* The app may be shown inside the hosting site's own frame (e.g. Streamlit Community
+     Cloud). Such a frame can block fullscreen or the camera; opening the app's own
+     address in a new tab removes that frame. */
+  function appIsFramed() {
+    try { return window.parent !== window.parent.parent; } catch (e) { return true; }
+  }
+  function appUrl() {
+    try { return window.parent.location.href; } catch (e) { return null; }
+  }
+  function openOwnTab(show) {
+    var url = appUrl(), wrap = document.getElementById("own-tab-wrap");
+    if (show && url) document.getElementById("own-tab").href = url;
+    wrap.classList.toggle("hidden", !(show && url));
+    setHeight();
+  }
+  function fullscreenBlocked(d) {
+    return !!d && !(d.fullscreenEnabled || d.webkitFullscreenEnabled);
+  }
+
+  function cameraErrorText(e) {
+    var n = (e && e.name) || "";
+    if (n === "NotAllowedError" || n === "SecurityError")
+      return "Camera or microphone access was blocked. Click the camera icon in the address bar, allow both, then press the button again.";
+    if (n === "NotFoundError" || n === "OverconstrainedError")
+      return "No camera was found. Connect a camera and try again.";
+    if (n === "NotReadableError")
+      return "The camera is being used by another app (for example Teams or Zoom). Close it and try again.";
+    if (!window.isSecureContext)
+      return "The camera only works when the app is opened on localhost or an https address.";
+    return "The camera could not be started (" + (n || "unknown error") + ").";
+  }
+  async function loadModels() {
+    var vision = await import(settings.bundleUrl);
+    var fileset = await vision.FilesetResolver.forVisionTasks(settings.wasmUrl);
+    async function make(Cls, opts) {
+      try { return await Cls.createFromOptions(fileset, Object.assign({}, opts, { baseOptions: Object.assign({}, opts.baseOptions, { delegate: "GPU" }) })); }
+      catch (e) { return await Cls.createFromOptions(fileset, Object.assign({}, opts, { baseOptions: Object.assign({}, opts.baseOptions, { delegate: "CPU" }) })); }
+    }
+    face = await make(vision.FaceLandmarker, {
+      baseOptions: { modelAssetPath: settings.faceModel }, runningMode: "VIDEO", numFaces: 3,
+      outputFacialTransformationMatrixes: true,
+    });
+    try {
+      hand = await make(vision.HandLandmarker, {
+        baseOptions: { modelAssetPath: settings.handModel }, runningMode: "VIDEO", numHands: 2,
+      });
+    } catch (e) { hand = null; console.warn("Hand model unavailable; face-covered check uses face loss only", e); }
+  }
+  function attach(video, ph) {
+    video.srcObject = stream;
+    return video.play().then(function () { ph.classList.add("hidden"); });
+  }
+
+  /* One observation from the current video frame. */
+  var lastTs = 0, frameNo = 0, lastHands = [], lastFace = null;
+  function observe(video) {
+    if (!face || !video.videoWidth) return { faceCount: 0 };
+    var ts = Math.max(performance.now(), lastTs + 1); lastTs = ts; frameNo++;
+    var r = face.detectForVideo(video, ts);
+    var faces = r.faceLandmarks || [];
+    var yaw = null, pitch = null, box = null, now = ts / 1000;
+    if (faces.length === 1) {
+      // inner face area (eyes, nose, mouth): a hand on the chin or cheek does not count
+      box = P.bbox(faces[0], -0.15); lastFace = { box: box, t: now };
+      var m = r.facialTransformationMatrixes && r.facialTransformationMatrixes[0];
+      var a = m && P.anglesFromMatrix(m.data);
+      if (a) { yaw = a.yaw; pitch = a.pitch; } else { yaw = P.yawFromLandmarks(faces[0]); }
+    }
+    if (hand && frameNo % 2 === 0) {
+      try { lastHands = (hand.detectForVideo(video, ts + 0.5).landmarks) || []; } catch (e) { lastHands = []; }
+    }
+    var ref = box || (lastFace && now - lastFace.t < 2 ? lastFace.box : null);
+    return { faceCount: faces.length, yaw: yaw, pitch: pitch, handOverFace: P.handCoversFace(ref, lastHands, 10) };
+  }
+
+  /* ---------------- Setup mode ---------------- */
+  var setupStarted = false;
+  function mark(id, ok) {
+    var el = document.getElementById(id);
+    el.classList.toggle("ok", ok === true); el.classList.toggle("bad", ok === false);
+    el.textContent = ok === true ? "✓" : ok === false ? "✕" : el.textContent;
+  }
+  function showErr(id, text, info) {
+    var el = document.getElementById(id);
+    el.textContent = text; el.classList.toggle("hidden", !text); el.classList.toggle("info", !!info);
+    setHeight();
+  }
+  function initSetup() {
+    if (setupStarted) return; setupStarted = true;
+    document.getElementById("setup").classList.remove("hidden");
+    var r = settings.rulesText || [];
+    document.getElementById("rules").innerHTML = r.map(function (x) {
+      var li = document.createElement("li"); li.textContent = x; return li.outerHTML; }).join("");
+    var v = document.getElementById("v1"), ph = document.getElementById("ph1");
+    var btnCam = document.getElementById("btn-cam"), btnFs = document.getElementById("btn-fs");
+    var goodSince = null, loopTimer = null;
+    if (fullscreenBlocked(pdoc())) {
+      showErr("err1", "This page is shown inside another website's frame, which does not allow fullscreen. " +
+              "Open the interview in its own tab to continue.");
+      openOwnTab(true);
+    }
+
+    btnCam.onclick = async function () {
+      showErr("err1", ""); btnCam.disabled = true; btnCam.textContent = "Starting camera…";
+      try { await startCamera(true); await attach(v, ph); mark("c-cam", true); }
+      catch (e) {
+        mark("c-cam", false); showErr("err1", cameraErrorText(e));
+        if (appIsFramed() && e && (e.name === "NotAllowedError" || e.name === "SecurityError")) openOwnTab(true);
+        btnCam.disabled = false; btnCam.textContent = "Try again"; return;
+      }
+      btnCam.textContent = "Loading face detection…";
+      try { if (!face) await loadModels(); mark("c-model", true); }
+      catch (e) {
+        mark("c-model", false); btnCam.disabled = false; btnCam.textContent = "Try again";
+        showErr("err1", "Face detection could not be loaded. Your network may block cdn.jsdelivr.net or storage.googleapis.com. Ask your administrator, or see PROCTOR_* settings in .env to use local copies.");
+        return;
+      }
+      btnCam.classList.add("hidden"); btnFs.classList.remove("hidden"); setHeight();
+      var rules = new P.ProctorRules(settings.thresholds);
+      loopTimer = setInterval(function () {
+        var o = observe(v);
+        var oneFace = o.faceCount === 1 && !o.handOverFace;
+        var cls = P.classify(o, rules.cfg);
+        mark("c-face", oneFace);
+        mark("c-look", oneFace && cls !== "looking_away");
+        var good = oneFace && cls === null, t = performance.now() / 1000;
+        goodSince = good ? (goodSince || t) : null;
+        btnFs.disabled = !(goodSince && t - goodSince >= 1.5);
+      }, 200);
+    };
+
+    btnFs.onclick = async function () {
+      var d = pdoc();
+      if (!d) { showErr("err1", "This page is embedded in a way that blocks fullscreen. Open the app directly in the browser."); return; }
+      var el = d.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+      try { await req.call(el, { navigationUI: "hide" }); }
+      catch (e) {
+        if (appIsFramed()) {
+          showErr("err1", "Fullscreen is blocked because this page is shown inside another website's frame. " +
+                  "Open the interview in its own tab to continue.");
+          openOwnTab(true);
+        } else {
+          showErr("err1", "The browser refused fullscreen. Use Chrome or Edge, then press the button again.");
+        }
+        return;
+      }
+      setTimeout(function () {
+        if (!fsElement(d)) { showErr("err1", "Fullscreen did not start. Press the button again."); return; }
+        clearInterval(loopTimer);
+        btnFs.disabled = true; btnFs.textContent = "Starting the interview…";
+        showErr("err1", "Do not leave fullscreen or switch to another window or tab until the interview ends.", true);
+        state.ready = true; pushValue();
+      }, 250);
+    };
+    setHeight();
+  }
+
+  /* ---------------- Monitor mode ---------------- */
+  var monitorStarted = false, ended = false, maxWarnings = 3, warnings = 0;
+  // paused: the app hit a technical problem (e.g. the AI model timed out). Nobody is
+  // penalised while it is being fixed; afterwards the candidate must return to fullscreen.
+  var paused = false, returnDeadline = null, RETURN_SECONDS = 60;
+  var cameraPaused = false;   // candidate is waiting for the AI: no camera warnings
+  var monitorHooks = {};
+  var listeners = [];
+  function on(target, evt, fn) { target.addEventListener(evt, fn); listeners.push([target, evt, fn]); }
+  function cleanup() {
+    listeners.forEach(function (l) { try { l[0].removeEventListener(l[1], l[2]); } catch (e) {} });
+    listeners = [];
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+  }
+  window.addEventListener("pagehide", cleanup);
+
+  function renderStrikes() {
+    var box = document.getElementById("strikes"); box.innerHTML = "";
+    for (var i = 0; i < maxWarnings; i++) {
+      var dot = document.createElement("i"); if (i < warnings) dot.className = "on"; box.appendChild(dot);
+    }
+    box.setAttribute("aria-label", warnings + " of " + maxWarnings + " warnings");
+    document.getElementById("mon-sub").textContent = warnings
+      ? "Warning " + warnings + " of " + maxWarnings + ". The interview ends at warning " + maxWarnings + "."
+      : "Stay in fullscreen and keep your face in view.";
+  }
+  function fatal(type, label) {
+    if (ended || paused || returnDeadline !== null) return;
+    ended = true;
+    addEvent(type, label, true);
+    document.getElementById("mon-title").textContent = "Interview ended";
+    document.getElementById("mon-title").id = "ended";
+    document.getElementById("mon-live").textContent = label;
+    cleanup(); setHeight();
+  }
+  function initMonitor() {
+    if (monitorStarted) return; monitorStarted = true;
+    document.getElementById("monitor").classList.remove("hidden");
+    renderStrikes(); setHeight();
+    var v = document.getElementById("v2"), ph = document.getElementById("ph2");
+    var live = document.getElementById("mon-live");
+    var rules = new P.ProctorRules(settings.thresholds);
+    var d = pdoc(), blurSince = null, grace = Number(settings.focusGraceSeconds || 1.5);
+    var startedAt = performance.now() / 1000, SETTLE_SECONDS = 3;
+
+    // When Streamlit removes the setup frame that held keyboard focus (the candidate had
+    // just clicked "Enter fullscreen and start" inside it), Chrome leaves NO element
+    // focused: document.hasFocus() reports false although the candidate never left, and
+    // no blur event fires. Give focus back to the page so later checks see the truth.
+    try { window.parent.focus(); } catch (e) { /* ignore */ }
+
+    // Fullscreen / tab / window switching -> immediate end
+    if (d) {
+      var fsHandler = function () { if (!fsElement(d)) fatal("left_fullscreen", "Left fullscreen mode"); };
+      on(d, "fullscreenchange", fsHandler); on(d, "webkitfullscreenchange", fsHandler);
+      on(d, "visibilitychange", function () { if (d.visibilityState === "hidden") fatal("tab_switch", "Switched to another tab or minimised the window"); });
+      setTimeout(function () { if (!paused && !fsElement(d)) fatal("left_fullscreen", "Not in fullscreen mode"); }, SETTLE_SECONDS * 1000);
+    } else {
+      addEvent("monitor_error", "Fullscreen and tab checks are unavailable on this page", false);
+    }
+
+    // Window switching (Alt+Tab, clicking another app). The timer starts only on a real
+    // blur event - never from a hasFocus() reading alone - and only if, after the event,
+    // the page as a whole has lost focus (focus moving into a frame on this page is fine).
+    function onBlur() {
+      if (ended) return;
+      setTimeout(function () { if (!hasFocus() && blurSince === null) blurSince = performance.now() / 1000; }, 0);
+    }
+    function onFocus() { blurSince = null; }
+    if (d) { on(window.parent, "blur", onBlur); on(window.parent, "focus", onFocus); }
+    on(window, "blur", onBlur); on(window, "focus", onFocus);
+    setInterval(function () {
+      if (ended || blurSince === null) return;
+      if (paused || returnDeadline !== null) { blurSince = null; return; }
+      var t = performance.now() / 1000;
+      if (hasFocus()) { blurSince = null; return; }
+      if (t - blurSince >= grace && t - startedAt >= SETTLE_SECONDS) fatal("window_switch", "Switched to another window or app");
+    }, 300);
+
+    // Camera checks -> counted warnings
+    var camOk = false, modelsTried = false;
+    async function start() {
+      if (ended) return;
+      try {
+        await startCamera(false); await attach(v, ph); camOk = true;
+        stream.getVideoTracks().forEach(function (tr) {
+          tr.onended = function () { camOk = false; ph.textContent = "Camera off"; ph.classList.remove("hidden"); setTimeout(start, 3000); };
+        });
+      } catch (e) {
+        // Camera unavailable: observations count as "face not visible", so warnings accumulate.
+        camOk = false; ph.textContent = "Camera off"; ph.classList.remove("hidden");
+        live.textContent = cameraErrorText(e); live.classList.add("bad"); setHeight();
+        setTimeout(start, 3000); return;
+      }
+      if (!face && !modelsTried) {
+        modelsTried = true;
+        try { await loadModels(); }
+        catch (e) { addEvent("monitor_error", "Face detection could not be loaded", false); }
+      }
+    }
+    start();
+    monitorHooks.resume = function () {
+      blurSince = null; rules.reset();
+      if (d && !fsElement(d)) {
+        returnDeadline = performance.now() / 1000 + Number(settings.returnSeconds || RETURN_SECONDS);
+        var b = document.getElementById("btn-return");
+        b.classList.remove("hidden");
+        b.onclick = function () {
+          var el = d.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+          try { req.call(el, { navigationUI: "hide" }); } catch (e) { /* the countdown continues */ }
+        };
+        setHeight();
+      }
+    };
+    setInterval(function () {
+      if (ended) return;
+      if (paused) { rules.reset(); live.textContent = "Paused while a technical problem is fixed"; live.classList.remove("bad"); return; }
+      if (cameraPaused && returnDeadline === null) { rules.reset(); live.textContent = "Waiting for the AI - camera warnings paused"; live.classList.remove("bad"); return; }
+      if (returnDeadline !== null) {
+        var left = Math.ceil(returnDeadline - performance.now() / 1000);
+        if (d && fsElement(d)) { returnDeadline = null; document.getElementById("btn-return").classList.add("hidden"); rules.reset(); setHeight(); return; }
+        if (left <= 0) { returnDeadline = null; fatal("left_fullscreen", "Did not return to fullscreen after the technical problem"); return; }
+        live.textContent = "Return to fullscreen within " + left + " s to continue the interview."; live.classList.add("bad");
+        return;
+      }
+      if (camOk && !face) { live.textContent = modelsTried ? "Face detection unavailable" : "Loading face detection…"; return; }
+      var obs = camOk ? observe(v) : { faceCount: 0 };
+      var violation = rules.update(obs, performance.now() / 1000);
+      var s = rules.status();
+      live.textContent = s ? s : "Face visible";
+      live.classList.toggle("bad", !!s);
+      if (violation) addEvent(violation.type, violation.label, false);
+    }, 200);
+  }
+
+  /* ---------------- Render messages from Streamlit ---------------- */
+  window.addEventListener("message", function (event) {
+    var data = event.data || {};
+    if (data.type !== "streamlit:render") return;
+    var args = data.args || {};
+    settings = args.settings || settings;
+    if (args.nonce && state.nonce !== args.nonce) { state.nonce = args.nonce; }
+    maxWarnings = Number(args.max_warnings || maxWarnings);
+    warnings = Number(args.warnings || 0);
+    if (args.mode === "exit") {
+      // Interview over: leave fullscreen. Renders nothing visible.
+      exitMode = true;
+      var d = pdoc();
+      try { if (fsElement(d)) (d.exitFullscreen || d.webkitExitFullscreen).call(d); } catch (e) { /* ignore */ }
+      send("streamlit:setFrameHeight", { height: 0 });
+      return;
+    }
+    if (args.mode === "monitor") {
+      var wasPaused = paused;
+      paused = !!args.paused;
+      cameraPaused = !!args.camera_paused;
+      initMonitor(); renderStrikes();
+      if (wasPaused && !paused && monitorHooks.resume) monitorHooks.resume();
+    }
+    else initSetup();
+    setHeight();
+  });
+  send("streamlit:componentReady", { apiVersion: 1 });
+  window.addEventListener("resize", setHeight);
+})();
+</script>
+</body>
+</html>
